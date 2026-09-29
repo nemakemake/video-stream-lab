@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
-"""
-Эмулятор протокола ESP32-камеры для разработки Qt-приложения без реального железа.
+"""Эмулятор протокола ESP32-камеры — для разработки без железа.
 
-Видео-канал (порт VIDEO_PORT): шлёт кадры как [4 байта длины, big-endian][JPEG].
-Кадры берутся из test_frames/*.jpg по кругу, если папка пуста — генерируются
-синтетические (через Pillow, если он установлен) или используется одна встроенная заглушка.
-
-Control-канал (порт CONTROL_PORT): принимает JSON-команды по одной на строку,
-печатает их и отвечает {"ack": true, ...}.
-
-Запуск:
-    python mock_server.py
+Видео (VIDEO_PORT): [4 байта длины, big-endian][JPEG].
+Control (CONTROL_PORT): JSON-команды по одной на строку, ack в ответ.
 """
 
 import json
@@ -24,7 +16,6 @@ import glob
 VIDEO_PORT = 3333
 CONTROL_PORT = 3334
 FPS = 15
-# Состояние "камеры" для команды get; set из клиента его обновляет.
 SETTINGS = {
     "auto_exposure": 1,
     "exposure": 300,
@@ -46,18 +37,16 @@ def load_frames():
         print(f"[mock] загружено {len(frames)} кадров из {FRAMES_DIR}")
         return frames
 
-    # Нет готовых JPEG — пробуем сгенерировать простые тестовые кадры через Pillow.
     try:
         from PIL import Image, ImageDraw
         import io
 
-        print("[mock] test_frames пуста, генерирую синтетические кадры (Pillow)")
+        print("[mock] test_frames пуста, генерирую синтетические кадры")
         frames = []
         w, h = 640, 480
         for i in range(30):
             img = Image.new("RGB", (w, h), (20, 20, 30))
             draw = ImageDraw.Draw(img)
-            # Движущийся квадрат + горизонтальный градиент, чтобы было что анализировать
             x = int((i / 30) * (w - 80))
             draw.rectangle([x, h // 2 - 40, x + 80, h // 2 + 40], fill=(220, 80, 60))
             for col in range(0, w, 4):

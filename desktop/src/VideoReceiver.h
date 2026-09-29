@@ -6,9 +6,7 @@
 #include <QByteArray>
 #include <QElapsedTimer>
 
-// Принимает видеопоток по протоколу v1: [4 байта длины, big-endian][JPEG-байты],
-// подряд, без разделителей. Работает как с реальным ESP32, так и с mock_server.py —
-// протокол одинаковый, меняется только адрес/порт.
+// Принимает видеопоток: [4 байта длины, big-endian][JPEG], подряд, без разделителей.
 class VideoReceiver : public QObject
 {
     Q_OBJECT
@@ -40,7 +38,6 @@ private:
     QTcpSocket *m_socket;
     QByteArray m_buffer;
 
-    // Заголовок кадра: 4 байта длины. Пока не накопили — не знаем, сколько ждать.
     static constexpr int kHeaderSize = 4;
     quint32 m_expectedFrameSize = 0;
     bool m_haveHeader = false;

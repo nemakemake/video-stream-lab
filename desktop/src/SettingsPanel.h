@@ -9,9 +9,8 @@ class QFormLayout;
 class QSlider;
 class QSpinBox;
 
-// Панель настроек камеры. Сама ничего не отправляет — только сообщает сигналом
-// parameterChanged(param, value), что пользователь изменил настройку. Имена
-// параметров совпадают с теми, что понимает прошивка (см. handleControlLine).
+// Панель настроек камеры. Сама ничего не отправляет — сообщает сигналом
+// parameterChanged, что пользователь изменил настройку.
 class SettingsPanel : public QWidget
 {
     Q_OBJECT
@@ -19,10 +18,7 @@ class SettingsPanel : public QWidget
 public:
     explicit SettingsPanel(QWidget *parent = nullptr);
 
-    // Панель доступна только при живом control-соединении.
     void setControlAvailable(bool available);
-
-    // Показывает настройки, полученные от устройства. Ответных команд не шлёт.
     void applySettings(const QJsonObject &settings);
 
 signals:

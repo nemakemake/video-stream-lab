@@ -20,8 +20,6 @@ SettingsPanel::SettingsPanel(QWidget *parent)
 
     auto *form = new QFormLayout(m_content);
 
-    // Экспозиция и gain вручную работают только при выключенном авто-режиме
-    // (прошивка сама выключает авто при ручной команде, но UI должен это отражать).
     auto *autoExposure = addCheckBox(form, QStringLiteral("Автоэкспозиция"),
                                      QStringLiteral("auto_exposure"), true);
     m_exposure = addSliderRow(form, QStringLiteral("Экспозиция"),
@@ -34,7 +32,6 @@ SettingsPanel::SettingsPanel(QWidget *parent)
 
     addCheckBox(form, QStringLiteral("Автобаланс белого"), QStringLiteral("whitebal"), true);
 
-    // 0..63, меньше = лучше качество и больше размер кадра.
     addSliderRow(form, QStringLiteral("Качество JPEG"),
                  QStringLiteral("jpeg_quality"), 4, 63, 12);
 
@@ -84,12 +81,10 @@ SettingsPanel::SliderRow SettingsPanel::addSliderRow(QFormLayout *form, const QS
     spin->setRange(min, max);
     spin->setValue(initial);
 
-    // Слайдер и спинбокс показывают одно значение (QSignalBlocker не нужен:
-    // setValue с тем же значением сигнал не испускает, цикла нет).
     connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
     connect(spin, &QSpinBox::valueChanged, slider, &QSlider::setValue);
 
-    // Debounce: при перетаскивании отправляем только последнее значение.
+    // debounce: шлём только последнее значение после остановки слайдера
     auto *timer = new QTimer(this);
     timer->setSingleShot(true);
     timer->setInterval(150);
@@ -108,8 +103,6 @@ SettingsPanel::SliderRow SettingsPanel::addSliderRow(QFormLayout *form, const QS
 
 void SettingsPanel::applySettings(const QJsonObject &settings)
 {
-    // Флаг гасит команды от чекбоксов; у слайдеров блокируем сигналы, иначе
-    // debounce-таймер отправил бы полученное значение обратно на устройство.
     m_applyingSettings = true;
 
     for (auto it = m_checkBoxes.cbegin(); it != m_checkBoxes.cend(); ++it) {

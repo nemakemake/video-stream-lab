@@ -57,7 +57,6 @@ void ControlClient::onReadyRead()
 {
     m_buffer.append(m_socket->readAll());
 
-    // Ответы приходят построчно; строка может прийти по частям.
     int newline;
     while ((newline = m_buffer.indexOf('\n')) >= 0) {
         const QByteArray line = m_buffer.left(newline).trimmed();

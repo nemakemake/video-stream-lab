@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ControlClient.h"
 #include "SettingsPanel.h"
+#include "SpectrumPanel.h"
 #include "VideoReceiver.h"
 
 #include <QDockWidget>
@@ -12,7 +13,6 @@
 #include <QHBoxLayout>
 #include <QWidget>
 
-// Control-порт по протоколу v1 (видео — 3333, выбирается в UI).
 static constexpr quint16 kControlPort = 3334;
 
 MainWindow::MainWindow(QWidget *parent)
@@ -20,6 +20,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_receiver(new VideoReceiver(this))
     , m_control(new ControlClient(this))
     , m_settingsPanel(new SettingsPanel(this))
+    , m_spectrumPanel(new SpectrumPanel(this))
 {
     setupUi();
 
@@ -39,11 +40,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_receiver, &VideoReceiver::errorOccurred, this, &MainWindow::onError);
     connect(m_receiver, &VideoReceiver::connected, this, &MainWindow::onConnected);
     connect(m_receiver, &VideoReceiver::disconnected, this, &MainWindow::onDisconnected);
+    connect(m_receiver, &VideoReceiver::frameReady, m_spectrumPanel, &SpectrumPanel::setFrame);
 }
 
 void MainWindow::setupUi()
 {
-    setWindowTitle(QStringLiteral("Video Stream Lab — Milestone 1"));
+    setWindowTitle(QStringLiteral("Video Stream Lab"));
     resize(900, 700);
 
     auto *central = new QWidget(this);
@@ -53,7 +55,7 @@ void MainWindow::setupUi()
     m_hostEdit = new QLineEdit(QStringLiteral("127.0.0.1"), central);
     m_portSpin = new QSpinBox(central);
     m_portSpin->setRange(1, 65535);
-    m_portSpin->setValue(3333); // видео-порт по протоколу v1, см. README
+    m_portSpin->setValue(3333);
     m_connectButton = new QPushButton(QStringLiteral("Подключиться"), central);
 
     connectionRow->addWidget(new QLabel(QStringLiteral("Хост:"), central));
@@ -80,6 +82,12 @@ void MainWindow::setupUi()
     settingsDock->setWidget(m_settingsPanel);
     settingsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
     addDockWidget(Qt::RightDockWidgetArea, settingsDock);
+
+    auto *spectrumDock = new QDockWidget(QStringLiteral("Спектр (2D FFT)"), this);
+    spectrumDock->setWidget(m_spectrumPanel);
+    spectrumDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+    addDockWidget(Qt::RightDockWidgetArea, spectrumDock);
+    tabifyDockWidget(settingsDock, spectrumDock);
 
     connect(m_connectButton, &QPushButton::clicked, this, &MainWindow::onConnectClicked);
 }
@@ -123,7 +131,6 @@ void MainWindow::onConnected()
 
 void MainWindow::onDisconnected()
 {
-    // Видео пропало — control без видео бесполезен и держит единственный слот на ESP32.
     m_control->disconnectFromHost();
     m_connectButton->setText(QStringLiteral("Подключиться"));
     m_statusLabel->setText(m_lastError.isEmpty()

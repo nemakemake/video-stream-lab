@@ -9,10 +9,8 @@ class QPushButton;
 class VideoReceiver;
 class ControlClient;
 class SettingsPanel;
+class SpectrumPanel;
 
-// Milestone 1: подключение к видеопотоку (реальному ESP32 или mock_server.py),
-// отображение кадров + live FPS. Дальше сюда будут добавляться вкладки анализаторов
-// (гистограмма, waveform/vectorscope, спектр, метрики канала).
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -34,6 +32,7 @@ private:
     VideoReceiver *m_receiver;
     ControlClient *m_control;
     SettingsPanel *m_settingsPanel;
+    SpectrumPanel *m_spectrumPanel;
 
     QLineEdit *m_hostEdit;
     QSpinBox *m_portSpin;
@@ -41,7 +40,5 @@ private:
     QLabel *m_videoLabel;
     QLabel *m_statusLabel;
 
-    // Запоминаем последнюю ошибку, чтобы onDisconnected() (который срабатывает
-    // сразу вслед за ошибкой, если она привела к разрыву) не затирал её текст.
     QString m_lastError;
 };

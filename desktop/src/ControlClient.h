@@ -5,9 +5,8 @@
 #include <QTcpSocket>
 #include <QByteArray>
 
-// Control-канал протокола v1: JSON-команды по одной на строку, например
-// {"cmd":"set","param":"exposure","value":300}. Прошивка (и mock_server.py)
-// отвечают {"ack":true,...}. Видео сюда не попадает — оно идёт по отдельному порту.
+// Control-канал: JSON-команды по одной на строку, например
+// {"cmd":"set","param":"exposure","value":300}. Ответ — {"ack":true,...}.
 class ControlClient : public QObject
 {
     Q_OBJECT
@@ -20,7 +19,6 @@ public:
     bool isConnected() const;
 
     void setParameter(const QString &param, int value);
-    // Просит у устройства текущие настройки; ответ придёт сигналом settingsReceived.
     void requestSettings();
 
 signals:

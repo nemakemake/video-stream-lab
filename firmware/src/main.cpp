@@ -1,12 +1,9 @@
 // Video Stream Lab — прошивка ESP32-S3 + OV5640.
-// Milestone 1+2: стримит JPEG по TCP (протокол v1, см. README проекта) и
-// принимает JSON-команды настройки камеры по отдельному control-каналу.
-// Совместима 1-в-1 с mock/mock_server.py — Qt-приложение не отличает одно от другого.
+// Стримит JPEG по TCP и принимает JSON-команды настройки камеры по control-каналу.
 
 #include <WiFi.h>
 #include <esp_camera.h>
 #include "camera_pins.h"
-// Реальные SSID/пароль — в wifi_credentials.h (не в репозитории, см. .example).
 #include "wifi_credentials.h"
 
 static const uint16_t VIDEO_PORT = 3333;
@@ -41,11 +38,9 @@ static bool initCamera()
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
 
-    // С PSRAM можно себе позволить кадр покрупнее и двойную буферизацию
-    // (второй буфер снижает шанс порванного кадра при медленном клиенте).
     if (psramFound()) {
-        config.frame_size = FRAMESIZE_VGA; // 640x480 — компромисс для старта
-        config.jpeg_quality = 12;          // 0..63, меньше = лучше качество/больше размер
+        config.frame_size = FRAMESIZE_VGA;
+        config.jpeg_quality = 12;
         config.fb_count = 2;
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_LATEST;
@@ -65,11 +60,7 @@ static bool initCamera()
     return true;
 }
 
-// Отправляет один JPEG-кадр в видео-канал по протоколу v1:
-// [4 байта длины, big-endian][JPEG-байты].
-// Возвращает false, если запись не удалась (клиент отвалился) — тогда
-// вызывающий код обязан закрыть videoClient, чтобы освободить слот для
-// нового подключения (см. комментарий в loop()).
+// [4 байта длины, big-endian][JPEG]. false — если запись не удалась.
 static bool sendFrame(WiFiClient &client, camera_fb_t *fb)
 {
     uint8_t header[4] = {
@@ -83,11 +74,6 @@ static bool sendFrame(WiFiClient &client, camera_fb_t *fb)
     return written == sizeof(header) + fb->len;
 }
 
-// Очень простой разбор ожидаемого формата команд без внешних зависимостей:
-// {"cmd":"set","param":"exposure","value":300}
-// Для более сложных команд в будущем стоит перейти на ArduinoJson.
-// Отвечает на {"cmd":"get"} текущими настройками сенсора (те же имена, что у set):
-// {"settings":{"auto_exposure":1,"exposure":300,"auto_gain":1,"gain":0,"whitebal":1,"jpeg_quality":12}}
 static void sendSettings()
 {
     sensor_t *sensor = esp_camera_sensor_get();
@@ -101,6 +87,8 @@ static void sendSettings()
         s.aec, s.aec_value, s.agc, s.agc_gain, s.awb, s.quality);
 }
 
+// Разбор без внешних зависимостей: {"cmd":"set","param":"exposure","value":300}
+// или {"cmd":"get"}.
 static void handleControlLine(const String &line)
 {
     if (line.indexOf("\"get\"") >= 0 && line.indexOf("\"param\"") < 0) {
@@ -118,8 +106,6 @@ static void handleControlLine(const String &line)
     String param = line.substring(paramStart, paramEnd);
 
     int valueColon = line.indexOf(':', valueIdx);
-
-    // Значение может быть числом без кавычек — читаем до запятой/скобки.
     int vStart = valueColon + 1;
     while (vStart < (int)line.length() && (line[vStart] == ' '))
         vStart++;
@@ -183,21 +169,14 @@ static unsigned long lastRssiLogMs = 0;
 
 void loop()
 {
-    // Диагностика: раз в секунду печатаем уровень сигнала Wi-Fi, чтобы отличить
-    // "плохой сигнал/просадка питания" от других причин обрыва связи.
     unsigned long now = millis();
     if (now - lastRssiLogMs >= 1000) {
         lastRssiLogMs = now;
         Serial.printf("[wifi] RSSI: %d dBm\n", WiFi.RSSI());
     }
 
-    // Переподключение видео-клиента (принимаем только одного за раз — этого
-    // достаточно для Milestone 1, простой sequential accept).
-    //
-    // Важно: новый клиент забирает слот, даже если videoClient.connected()
-    // всё ещё зачем-то говорит true — после неудачной записи (см. ниже)
-    // WiFiClient не всегда сразу отражает разрыв, и без explicit stop()
-    // сервер мог навечно "зависнуть", отказывая всем новым подключениям.
+    // новый клиент забирает слот всегда, иначе сервер может зависнуть после
+    // неудачной записи в старого клиента
     if (videoServer.hasClient()) {
         if (videoClient) {
             videoClient.stop();
@@ -217,7 +196,6 @@ void loop()
         }
     }
 
-    // Control-канал: неблокирующее чтение строк.
     if (!controlClient || !controlClient.connected()) {
         WiFiClient newClient = controlServer.available();
         if (newClient) {

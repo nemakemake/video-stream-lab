@@ -8,7 +8,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Concurrent)
 
 add_executable(VideoStreamLab
     src/main.cpp
@@ -20,9 +20,13 @@ add_executable(VideoStreamLab
     src/ControlClient.h
     src/SettingsPanel.cpp
     src/SettingsPanel.h
+    src/SpectrumPanel.cpp
+    src/SpectrumPanel.h
+    src/Fft.cpp
+    src/Fft.h
 )
 
-target_link_libraries(VideoStreamLab PRIVATE Qt6::Widgets Qt6::Network)
+target_link_libraries(VideoStreamLab PRIVATE Qt6::Widgets Qt6::Network Qt6::Concurrent)
 
 # На Windows Qt-библиотеки не находятся автоматически рядом с .exe — нужно
 # разложить их (и платформенный плагин qwindows.dll, без которого приложение
