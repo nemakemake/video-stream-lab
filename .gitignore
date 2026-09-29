@@ -1,0 +1,23 @@
+# CMake build dirs
+build/
+desktop/build/
+
+# PlatformIO
+firmware/.pio/
+
+# Реальные Wi-Fi credentials (см. wifi_credentials.h.example)
+firmware/src/wifi_credentials.h
+
+# Debug artifacts / logs
+desktop/build/debug.log
+*.log
+
+# VS / MSVC
+*.ilk
+*.pdb
+*.obj
+*.exe
+
+# OS
+Thumbs.db
+.DS_Store

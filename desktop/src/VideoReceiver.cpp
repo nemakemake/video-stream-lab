@@ -1,0 +1,136 @@
+#include "VideoReceiver.h"
+
+#include <QDataStream>
+#include <QFile>
+#include <QDateTime>
+#include <QCoreApplication>
+#include <QDir>
+
+// Временная файловая диагностика (qDebug() в GUI-приложении на Windows уходит
+// в OutputDebugString, а не в консоль — его не видно при обычном запуске).
+static void debugLog(const QString &line)
+{
+    const QString path = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("debug.log"));
+    QFile f(path);
+    if (f.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream ts(&f);
+        ts << QDateTime::currentDateTime().toString(Qt::ISODateWithMs) << " " << line << "\n";
+    }
+}
+
+VideoReceiver::VideoReceiver(QObject *parent)
+    : QObject(parent)
+    , m_socket(new QTcpSocket(this))
+{
+    connect(m_socket, &QTcpSocket::readyRead, this, &VideoReceiver::onReadyRead);
+    connect(m_socket, &QTcpSocket::connected, this, [this]() {
+        debugLog(QStringLiteral("QTcpSocket::connected сигнал получен"));
+        emit connected();
+    });
+    connect(m_socket, &QTcpSocket::disconnected, this, [this]() {
+        debugLog(QStringLiteral("QTcpSocket::disconnected сигнал получен"));
+        emit disconnected();
+    });
+    connect(m_socket, &QTcpSocket::errorOccurred, this, &VideoReceiver::onSocketError);
+
+    m_fpsTimer.start();
+}
+
+void VideoReceiver::connectToHost(const QString &host, quint16 port)
+{
+    debugLog(QStringLiteral("connectToHost(%1:%2), состояние сокета до вызова: %3")
+                 .arg(host)
+                 .arg(port)
+                 .arg(m_socket->state()));
+    m_buffer.clear();
+    m_haveHeader = false;
+    m_expectedFrameSize = 0;
+    m_socket->connectToHost(host, port);
+}
+
+void VideoReceiver::disconnectFromHost()
+{
+    m_socket->disconnectFromHost();
+}
+
+bool VideoReceiver::isConnected() const
+{
+    return m_socket->state() == QAbstractSocket::ConnectedState;
+}
+
+void VideoReceiver::onReadyRead()
+{
+    const QByteArray chunk = m_socket->readAll();
+    debugLog(QStringLiteral("onReadyRead: получено %1 байт").arg(chunk.size()));
+    m_buffer.append(chunk);
+    tryParseBuffer();
+}
+
+void VideoReceiver::tryParseBuffer()
+{
+    // Может прийти несколько кадров за один readyRead — разбираем буфер в цикле,
+    // пока в нём хватает данных на следующий шаг (заголовок или тело кадра).
+    while (true) {
+        if (!m_haveHeader) {
+            if (m_buffer.size() < kHeaderSize)
+                return;
+
+            QDataStream stream(m_buffer.left(kHeaderSize));
+            stream.setByteOrder(QDataStream::BigEndian);
+            stream >> m_expectedFrameSize;
+            m_buffer.remove(0, kHeaderSize);
+            m_haveHeader = true;
+            debugLog(QStringLiteral("заголовок кадра, ожидаем байт: %1, уже в буфере: %2")
+                         .arg(m_expectedFrameSize)
+                         .arg(m_buffer.size()));
+
+            // Защита от рассинхронизации протокола (например, подключились
+            // посреди потока) — не пытаемся выделять гигабайты под "кадр".
+            constexpr quint32 kMaxSaneFrameSize = 16 * 1024 * 1024;
+            if (m_expectedFrameSize == 0 || m_expectedFrameSize > kMaxSaneFrameSize) {
+                emit errorOccurred(QStringLiteral("Некорректный размер кадра в потоке (%1) — "
+                                                   "похоже на рассинхронизацию протокола")
+                                        .arg(m_expectedFrameSize));
+                disconnectFromHost();
+                return;
+            }
+        }
+
+        if (m_buffer.size() < static_cast<int>(m_expectedFrameSize))
+            return;
+
+        const QByteArray jpegData = m_buffer.left(m_expectedFrameSize);
+        m_buffer.remove(0, m_expectedFrameSize);
+        m_haveHeader = false;
+
+        QImage frame;
+        if (frame.loadFromData(jpegData, "JPEG")) {
+            emit frameReady(frame);
+            updateFpsCounter();
+        } else {
+            emit errorOccurred(QStringLiteral("Не удалось декодировать JPEG-кадр (%1 байт)")
+                                    .arg(jpegData.size()));
+        }
+    }
+}
+
+void VideoReceiver::updateFpsCounter()
+{
+    ++m_framesSinceLastFpsUpdate;
+    const qint64 elapsedMs = m_fpsTimer.elapsed();
+    if (elapsedMs >= 1000) {
+        m_currentFps = m_framesSinceLastFpsUpdate * 1000.0 / elapsedMs;
+        m_framesSinceLastFpsUpdate = 0;
+        m_fpsTimer.restart();
+        emit fpsUpdated(m_currentFps);
+    }
+}
+
+void VideoReceiver::onSocketError(QAbstractSocket::SocketError error)
+{
+    debugLog(QStringLiteral("onSocketError: код=%1, текст=\"%2\", состояние сокета=%3")
+                 .arg(error)
+                 .arg(m_socket->errorString())
+                 .arg(m_socket->state()));
+    emit errorOccurred(m_socket->errorString());
+}

@@ -1,0 +1,17 @@
+{
+    "folders": [
+        {
+            "name": "desktop (Qt)",
+            "path": "desktop"
+        },
+        {
+            "name": "firmware (ESP32-S3)",
+            "path": "firmware"
+        }
+    ],
+    "settings": {
+        // Настройки здесь общие для всего окна. Специфичные для CMake/PlatformIO
+        // настройки оставляем в desktop/.vscode/settings.json и firmware/.vscode/settings.json —
+        // они продолжают работать как обычно, per-folder.
+    }
+}
